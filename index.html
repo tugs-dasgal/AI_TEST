@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="mn">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Ухаалаг Математикийн Сорил</title>
+  <!-- MathJax Томьёо хөрвүүлэгч -->
+  <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+  <style>
+    :root {
+      --primary: #4f46e5;
+      --primary-hover: #4338ca;
+      --bg: #f3f4f6;
+      --card-bg: #ffffff;
+      --text: #1f2937;
+    }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+    }
+    .container {
+      width: 100%;
+      max-width: 750px;
+      background: var(--card-bg);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+    }
+    h1, h2, h3 { color: #111827; margin-top: 0; }
+    .btn {
+      background-color: var(--primary);
+      color: white;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: 600;
+      width: 100%;
+      transition: background 0.2s;
+    }
+    .btn:hover { background-color: var(--primary-hover); }
+    .btn:disabled { background-color: #9ca3af; cursor: not-allowed; }
+    .hidden { display: none !important; }
+    
+    /* Quiz UI */
+    .question-card {
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 20px;
+    }
+    .option-btn {
+      display: block;
+      width: 100%;
+      text-align: left;
+      background: white;
+      border: 1px solid #d1d5db;
+      padding: 12px 16px;
+      margin: 8px 0;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 15px;
+    }
+    .option-btn:hover { background: #eff6ff; border-color: #3b82f6; }
+    .option-btn.correct { background: #dcfce7; border-color: #22c55e; color: #15803d; }
+    .option-btn.incorrect { background: #fee2e2; border-color: #ef4444; color: #b91c1c; }
+    
+    /* AI Tutor Chat */
+    .ai-box {
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 12px;
+      padding: 16px;
+      margin-top: 16px;
+    }
+    .ai-chat-input {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .ai-chat-input input {
+      flex: 1;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
+    .loading {
+      text-align: center;
+      padding: 20px;
+      font-style: italic;
+      color: #6b7280;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h1>🤖 AI Ухаалаг Математикийн Сорил</h1>
+  
+  <!-- Step 1: Start -->
+  <div id="start-screen">
+    <p>AI танд зориулж математикийн бодлогуудыг автоматаар бэлдэнэ. Буруу хариулвал AI Багш тусалж, төгсгөлд нь дүн шинжилгээ гаргаж өгнө.</p>
+    <button class="btn" onclick="generateQuiz()">Сорил эхлүүлэх (AI-аар бодлого үүсгэх)</button>
+  </div>
+
+  <!-- Loading Indicator -->
+  <div id="loading" class="loading hidden">
+    ⏳ AI ажиллаж байна, түр хүлээнэ үү...
+  </div>
+
+  <!-- Step 2: Quiz Screen -->
+  <div id="quiz-screen" class="hidden">
+    <div id="questions-container"></div>
+    <button class="btn" id="submit-btn" onclick="finishQuiz()">Сорил дуусгах ба AI Дүн шинжилгээ харах</button>
+  </div>
+
+  <!-- Step 3: Result Screen -->
+  <div id="result-screen" class="hidden">
+    <h2>📊 Сорилын Дүн ба AI Анализ</h2>
+    <div id="score-text"></div>
+    <div class="ai-box">
+      <h3>🤖 AI Багшийн Зөвлөмж:</h3>
+      <div id="ai-analysis"></div>
+    </div>
+    <br>
+    <button class="btn" onclick="location.reload()">Дахин шинэ сорил ажиллах</button>
+  </div>
+</div>
+
+<script>
+  // Таны олгосон API Key оруулсан:
+  const GEMINI_API_KEY = "AQ.Ab8RN6LLJv4R4qhiodiVmhbUKvAYMsI6UZWxtZhEsf-DTTCUdA"; 
+
+  let quizData = [];
+  let userAnswers = {};
+
+  async function callGemini(prompt, jsonMode = false) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+    
+    const requestBody = {
+      contents: [{ parts: [{ text: prompt }] }]
+    };
+
+    if (jsonMode) {
+      requestBody.generationConfig = { responseMimeType: "application/json" };
+    }
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestBody)
+    });
+
+    if (!response.ok) {
+      const errData = await response.json();
+      throw new Error(errData.error?.message || "API call failed");
+    }
+
+    const data = await response.json();
+    return data.candidates[0].content.parts[0].text;
+  }
+
+  // 1. AI Бодлого үүсгэх
+  async function generateQuiz() {
+    showLoading(true);
+    document.getElementById('start-screen').classList.add('hidden');
+
+    const prompt = `Математикийн дунд түвшний 3 бодлого JSON форматаар үүсгэж өг. 
+    Хариултын формат: JSON array of objects with keys: "id", "question", "options" (4 сонголттой массив), "correct" (зөв сонголтын индекс 0-3), "explanation" (дэлгэрэнгүй бодолт). 
+    LaTeX томьёог \\( \\) ашиглаж бичээрэй.`;
+
+    try {
+      let rawText = await callGemini(prompt, true);
+      quizData = JSON.parse(rawText);
+      renderQuiz();
+    } catch (e) {
+      alert("AI бодлого үүсгэхэд алдаа гарлаа: " + e.message);
+      console.error(e);
+      document.getElementById('start-screen').classList.remove('hidden');
+    } finally {
+      showLoading(false);
+    }
+  }
+
+  // Боднуудыг дэлгэцэд гаргах
+  function renderQuiz() {
+    const container = document.getElementById('questions-container');
+    container.innerHTML = '';
+
+    quizData.forEach((q, idx) => {
+      const qDiv = document.createElement('div');
+      qDiv.className = 'question-card';
+      qDiv.innerHTML = `
+        <h3>Бодлого ${idx + 1}: ${q.question}</h3>
+        <div id="options-${idx}">
+          ${q.options.map((opt, oIdx) => `
+            <button class="option-btn" onclick="selectAnswer(${idx},${oIdx}, this)">
+              ${String.fromCharCode(65 + oIdx)})${opt}
+            </button>
+          `).join('')}
+        </div>
+        <div id="ai-tutor-${idx}" class="ai-box hidden"></div>
+      `;
+      container.appendChild(qDiv);
+    });
+
+    document.getElementById('quiz-screen').classList.remove('hidden');
+    if (window.MathJax) MathJax.typesetPromise();
+  }
+
+  // Сонголт хийх ба AI Багшийн тайлбар
+  function selectAnswer(qIdx, selectedOpt, btn) {
+    if (userAnswers[qIdx] !== undefined) return;
+    userAnswers[qIdx] = selectedOpt;
+
+    const q = quizData[qIdx];
+    const tutorBox = document.getElementById(`ai-tutor-${qIdx}`);
+    tutorBox.classList.remove('hidden');
+
+    const buttons = document.querySelectorAll(`#options-${qIdx} .option-btn`);
+    
+    if (selectedOpt === q.correct) {
+      btn.classList.add('correct');
+      tutorBox.innerHTML = `<b>✅ Зөв хариуллаа!</b><br>${q.explanation}`;
+    } else {
+      btn.classList.add('incorrect');
+      buttons[q.correct].classList.add('correct');
+      tutorBox.innerHTML = `
+        <b>❌ Буруу байна.</b><br>
+        <b>Зөв хариулт:</b> ${q.options[q.correct]}<br>
+        <b>AI Тайлбар:</b> ${q.explanation}
+        <div class="ai-chat-input">
+          <input type="text" id="chat-input-${qIdx}" placeholder="AI багшаас асуух зүйл байна уу?">
+          <button class="btn" style="width: auto;" onclick="askAITutor(${qIdx})">Асуух</button>
+        </div>
+        <div id="chat-response-${qIdx}" style="margin-top: 8px;"></div>
+      `;
+    }
+    if (window.MathJax) MathJax.typesetPromise();
+  }
+
+  // AI Багшаас шууд асуух (Чат)
+  async function askAITutor(qIdx) {
+    const input = document.getElementById(`chat-input-${qIdx}`);
+    const resDiv = document.getElementById(`chat-response-${qIdx}`);
+    if (!input.value) return;
+
+    resDiv.innerHTML = "<i>AI багш хариулж байна...</i>";
+    const prompt = `Сурагч " ${quizData[qIdx].question} " бодлого дээр дараах асуултыг асуулаа: "${input.value}". Сурагчид ойлгомжтой, найрсгаар дэлгэрэнгүй хариулж өгнө үү.`;
+    
+    try {
+      const reply = await callGemini(prompt);
+      resDiv.innerHTML = `<b>🤖 AI Багш:</b> ${reply}`;
+    } catch (err) {
+      resDiv.innerHTML = "<b>⚠️ Хариулт авахад алдаа гарлаа.</b>";
+    }
+    input.value = '';
+    if (window.MathJax) MathJax.typesetPromise();
+  }
+
+  // 3. AI Дүнгийн Шинжилгээ
+  async function finishQuiz() {
+    showLoading(true);
+    document.getElementById('quiz-screen').classList.add('hidden');
+
+    let correctCount = 0;
+    quizData.forEach((q, idx) => {
+      if (userAnswers[idx] === q.correct) correctCount++;
+    });
+
+    document.getElementById('score-text').innerHTML = `<h3>Та ${quizData.length}-аас <b>${correctCount}</b> бодлого зөв бодлоо!</h3>`;
+
+    const prompt = `Сурагчийн сорилын дүн: ${quizData.length}-аас ${correctCount} зөв. 
+    Бодлогууд ба сурагчийн хариултууд: ${JSON.stringify(userAnswers)}. 
+    Энэ сурагчийн давуу ба сул талд шинжилгээ хийж, цаашид юу давтах шаардлагатай талаар сурагчид зориулсан 3-4 өгүүлбэртэй урамшуулсан зөвлөмж бичиж өгнө үү.`;
+
+    try {
+      const analysis = await callGemini(prompt);
+      document.getElementById('ai-analysis').innerHTML = analysis;
+    } catch (err) {
+      document.getElementById('ai-analysis').innerHTML = "Дүн шинжилгээ гаргахад алдаа гарлаа.";
+    }
+
+    showLoading(false);
+    document.getElementById('result-screen').classList.remove('hidden');
+    if (window.MathJax) MathJax.typesetPromise();
+  }
+
+  function showLoading(show) {
+    document.getElementById('loading').classList.toggle('hidden', !show);
+  }
+</script>
+
+</body>
+</html>
